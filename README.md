@@ -4,16 +4,16 @@ A clean, fast, content-driven CV / resume website built with **Astro**, **Tailwi
 
 Every section of the page (about, work, studies, projects, certifications, blogs, contact) is a plain Markdown file. Edit Markdown — the page updates itself. No database, no CMS, no rebuild of components required.
 
-- Light / dark daisyUI themes (`lofi`, `black`) applied from `localStorage`
+- Light / dark daisyUI themes (`lofi`, `black`) with `localStorage` persistence
 - Accordion-based single-page layout
 - PDF resume viewer and download button
 - Content collected automatically from `/src/pages/**/*.md` via `import.meta.glob`
-- Server output ready for Vercel, plus full static build support
+- Static output deployed to GitHub Pages by a GitHub Actions workflow
 - Optimized assets via `astro-compress`
 
 ## Demo
 
-Live preview: [astro-cv-esquelete.vercel.app](https://astro-cv-esquelete.vercel.app/)
+Live site: [girishlade111.github.io/astro-cv-esquelete](https://girishlade111.github.io/astro-cv-esquelete/)
 
 ## Tech Stack
 
@@ -25,7 +25,8 @@ Live preview: [astro-cv-esquelete.vercel.app](https://astro-cv-esquelete.vercel.
 | Icons | [astro-icon](https://github.com/natemoo-re/astro-icon) + `@iconify-json/carbon`, `@iconify-json/mdi` |
 | Font | [DM Sans variable](https://fontsource.org/) via `@fontsource-variable/dm-sans` |
 | Theming | [theme-change](https://github.com/benjazehr/theme-change) |
-| Build extras | `astro-compress`, `@astrojs/tailwind`, `@astrojs/vercel` |
+| Build extras | `astro-compress`, `@astrojs/tailwind` |
+| Deployment | GitHub Pages via `actions/deploy-pages` |
 | Runtime | Node.js >= 22 |
 
 ## Requirements
@@ -51,7 +52,7 @@ Dev server runs at `http://localhost:4321`.
 | `npm install` | Install dependencies |
 | `npm run dev` | Start dev server with hot reload at `localhost:4321` |
 | `npm run start` | Alias for `npm run dev` |
-| `npm run build` | Build production output (`./dist/` for static, Vercel function bundle for server) |
+| `npm run build` | Build the static site to `./dist/` |
 | `npm run preview` | Preview the production build locally |
 | `npm run astro` | Run the raw Astro CLI (`npm run astro -- --help`) |
 
@@ -59,6 +60,9 @@ Dev server runs at `http://localhost:4321`.
 
 ```text
 .
+├── .github/
+│   └── workflows/
+│       └── deploy.yml          # Build + deploy to GitHub Pages on push to main
 ├── public/                     # Static files served as-is
 │   ├── cv-20240219.pdf         # Resume shown in the "Files" section
 │   ├── favicon.webp
@@ -87,7 +91,7 @@ Dev server runs at `http://localhost:4321`.
 │   │   └── contact/*.md
 │   ├── scripts/theme.js
 │   └── env.d.ts
-├── astro.config.mjs            # Integrations, adapter, output mode
+├── astro.config.mjs            # Integrations, static output, site/base for Pages
 ├── tailwind.config.mjs         # daisyUI themes (lofi + black), fonts
 ├── tsconfig.json
 └── vercel.json
@@ -156,33 +160,48 @@ Two daisyUI themes are configured in `tailwind.config.mjs`:
 
 Both customize `--rounded-box: 1rem`, `--rounded-btn: 0.5rem`, `--rounded-badge: 1.9rem`.
 
-Theme selection happens in `src/layouts/BaseLayout.astro`: an inline script reads `localStorage.theme` and writes `data-theme` on `<html>`, defaulting to `lofi`. The `theme-change` package is initialised there too, so any element using `data-toggle-theme` will switch themes and persist the choice. To add a theme, extend the `daisyui.themes` array and add its name to the switch.
+Theme selection happens in `src/layouts/BaseLayout.astro`: an inline script reads `localStorage.theme` and writes `data-theme` on `<html>`, defaulting to `lofi`. The `theme-change` package is initialised there too, and the toggle in `src/pages/index.astro` (`data-toggle-theme="black,lofi"`) switches themes and persists the choice. To add a theme, extend the `daisyui.themes` array and add its name to the toggle.
 
 Fonts live under `tailwind.config.mjs` → `theme.extend.fontFamily.sans` (`DM Sans`, then `Inter`, then Tailwind defaults).
 
 ## Deployment
 
-### Vercel
+### GitHub Pages (default)
 
-`astro.config.mjs` uses `output: "server"` with the `@astrojs/vercel` adapter, and `vercel.json` declares the framework, install and build commands.
+The site builds to static HTML and deploys with GitHub Actions.
 
-1. Push the repo to GitHub.
-2. Import it in Vercel.
-3. Deploy — no environment variables required.
+- `astro.config.mjs` sets `output: "static"`, `site: "https://girishlade111.github.io"` and `base: "/astro-cv-esquelete"` for the project-page URL.
+- `.github/workflows/deploy.yml` runs on every push to `main`: `npm ci` → `npm run build` → `actions/upload-pages-artifact` → `actions/deploy-pages`.
+- Repository → **Settings → Pages → Build and deployment → Source** must be **GitHub Actions** (already configured for this repo).
 
-### Static hosting (Netlify, GitHub Pages, Cloudflare Pages, S3)
+The workflow needs these permissions, declared in the file:
 
-The site does not use server-side rendering. Switch to static output:
-
-```js
-// astro.config.mjs
-export default defineConfig({
-  integrations: [tailwind(), icon(), compress()],
-  output: "static",
-});
+```yaml
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 ```
 
-Then run `npm run build` and deploy the generated `dist/` folder. Note that `site` / `base` may need to be set for project-style GitHub Pages URLs.
+Live URL: `https://girishlade111.github.io/astro-cv-esquelete/`
+
+Any asset referenced by an absolute path must include the base:
+
+```astro
+const PDF = `${import.meta.env.BASE_URL}/cv-20240219.pdf`;
+```
+
+### User or custom-domain Pages site
+
+When serving from `https://<user>.github.io/` or a custom domain, remove `base` from `astro.config.mjs` (and update `site`). Absolute asset paths then resolve from the root.
+
+### Other static hosts (Netlify, Cloudflare Pages, S3)
+
+Run `npm run build` and deploy the generated `dist/` folder. Set `site` / `base` in `astro.config.mjs` to match the host URL and sub-path.
+
+### Vercel
+
+`vercel.json` and the `@astrojs/vercel` dependency are still present from the original template, but nothing requires them for a static build: import the repo in Vercel and it will run `npm run build` and serve `dist/`.
 
 ## Build Notes
 
@@ -197,8 +216,9 @@ Then run `npm run build` and deploy the generated `dist/` folder. Note that `sit
 | `Unsupported engine` warning on install | Node is older than 22. Install Node 22+ or run `nvm use`. |
 | A new Markdown file does not appear | File must be directly inside its section folder and use a `.md` extension; restart `npm run dev` if the glob cache is stale. |
 | Card link renders without a label | The section expects a specific label field (`org`, `institute`, `url_name`). Check the field mapping table above. |
-| Theme does not persist | `theme-change` must run client-side; ensure no `data-toggle-theme` element lost its attributes and `localStorage` is not blocked. |
-| Vercel build fails on PDF or images | Confirm binary assets were committed (no Git LFS filter issues). |
+| Theme does not persist | `theme-change` must run client-side; ensure the toggle in `src/pages/index.astro` keeps `data-toggle-theme` and `localStorage` is not blocked. |
+| Assets 404 after deploying to a sub-path | Absolute `/file.ext` paths bypass `base`. Build them from `import.meta.env.BASE_URL`. |
+| Pages deploy job fails on permissions | Check **Settings → Pages → Source = GitHub Actions** and the `pages: write` + `id-token: write` permissions in `deploy.yml`. |
 
 ## License
 
